@@ -55,6 +55,9 @@ public:
     // check if all baros are healthy - used for SYS_STATUS report
     bool all_healthy(void) const;
 
+    // get primary sensor
+    uint8_t get_primary(void) const { return _primary; }
+
     // pressure in Pascal. Divide by 100 for millibars or hectopascals
     float get_pressure(void) const { return get_pressure(_primary); }
     float get_pressure(uint8_t instance) const { return sensors[instance].pressure; }
@@ -215,6 +218,7 @@ private:
         PROBE_KELLER=(1<<8),
         PROBE_MS5837=(1<<9),
         PROBE_BMP388=(1<<10),
+        PROBE_SPL06=(1<<11),
     };
     
     struct sensor {
@@ -229,6 +233,7 @@ private:
         bool healthy;                   // true if sensor is healthy
         bool alt_ok;                    // true if calculated altitude is ok
         bool calibrated;                // true if calculated calibrated successfully
+        AP_Int32 bus_id;
     } sensors[BARO_MAX_INSTANCES];
 
     AP_Float                            _alt_offset;
@@ -254,7 +259,7 @@ private:
     AP_Int32                           _baro_probe_ext;
 
     // semaphore for API access from threads
-    HAL_Semaphore_Recursive            _rsem;
+    HAL_Semaphore                      _rsem;
 };
 
 namespace AP {

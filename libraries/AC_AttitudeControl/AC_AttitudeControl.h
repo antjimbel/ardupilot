@@ -135,13 +135,9 @@ public:
     // Command an euler roll, pitch and yaw angle with angular velocity feedforward and smoothing
     virtual void input_euler_angle_roll_pitch_yaw(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_angle_cd, bool slew_yaw);
 
-    // Command euler yaw rate and pitch angle with roll angle specified in body frame with multicopter style controls
+    // Command euler yaw rate and pitch angle with roll angle specified in body frame
     // (used only by tailsitter quadplanes)
-    virtual void input_euler_rate_yaw_euler_angle_pitch_bf_roll_m(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_rate_cds);
-
-    // Command euler yaw rate and pitch angle with roll angle specified in body frame with plane style controls
-    // (used only by tailsitter quadplanes)
-    virtual void input_euler_rate_yaw_euler_angle_pitch_bf_roll_p(float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_rate_cds);
+    virtual void input_euler_rate_yaw_euler_angle_pitch_bf_roll(bool plane_controls, float euler_roll_angle_cd, float euler_pitch_angle_cd, float euler_yaw_rate_cds);
 
     // Command an euler roll, pitch, and yaw rate with angular velocity feedforward and smoothing
     void input_euler_rate_roll_pitch_yaw(float euler_roll_rate_cds, float euler_pitch_rate_cds, float euler_yaw_rate_cds);
@@ -304,7 +300,7 @@ public:
     // control rpy throttle mix
     virtual void set_throttle_mix_min() {}
     virtual void set_throttle_mix_man() {}
-    virtual void set_throttle_mix_max() {}
+    virtual void set_throttle_mix_max(float ratio) {}
     virtual void set_throttle_mix_value(float value) {}
     virtual float get_throttle_mix(void) const { return 0; }
 
@@ -440,6 +436,9 @@ protected:
     // mix between throttle and hover throttle for 0 to 1 and ratio above hover throttle for >1
     float               _throttle_rpy_mix;
 
+    // Yaw feed forward percent to allow zero yaw actuator output during extreme roll and pitch corrections
+    float               _feedforward_scalar = 1.0f;
+
     // References to external libraries
     const AP_AHRS_View&  _ahrs;
     const AP_Vehicle::MultiCopter &_aparm;
@@ -477,6 +476,3 @@ public:
     float control_monitor_rms_output_pitch(void) const;
     float control_monitor_rms_output_yaw(void) const;
 };
-
-#define AC_ATTITUDE_CONTROL_LOG_FORMAT(msg) { msg, sizeof(AC_AttitudeControl::log_Attitude),	\
-                            "ATT", "cccccCC",      "RollIn,Roll,PitchIn,Pitch,YawIn,Yaw,NavYaw" }

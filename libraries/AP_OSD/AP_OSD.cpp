@@ -18,10 +18,14 @@
  */
 
 #include "AP_OSD.h"
+
+#if OSD_ENABLED
+
 #include "AP_OSD_MAX7456.h"
 #ifdef WITH_SITL_OSD
 #include "AP_OSD_SITL.h"
 #endif
+#include "AP_OSD_MSP.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_HAL/Util.h>
 #include <RC_Channel/RC_Channel.h>
@@ -163,8 +167,14 @@ const AP_Param::GroupInfo AP_OSD::var_info[] = {
 
 extern const AP_HAL::HAL& hal;
 
+// singleton instance
+AP_OSD *AP_OSD::_singleton;
+
 AP_OSD::AP_OSD()
 {
+    if (_singleton != nullptr) {
+        AP_HAL::panic("AP_OSD must be singleton");
+    }
     AP_Param::setup_object_defaults(this, var_info);
     // default first screen enabled
     screen[0].enabled = 1;
@@ -176,6 +186,7 @@ AP_OSD::AP_OSD()
     osd_type.set_default(HAL_OSD_TYPE_DEFAULT);
 #endif
     previous_pwm_screen = -1;
+    _singleton = this;
 }
 
 void AP_OSD::init()
@@ -186,6 +197,7 @@ void AP_OSD::init()
         break;
 
     case OSD_MAX7456: {
+#ifdef HAL_WITH_SPI_OSD
         AP_HAL::OwnPtr<AP_HAL::Device> spi_dev = std::move(hal.spi->get_device("osd"));
         if (!spi_dev) {
             break;
@@ -195,6 +207,7 @@ void AP_OSD::init()
             break;
         }
         hal.console->printf("Started MAX7456 OSD\n");
+#endif
         break;
     }
 
@@ -208,9 +221,17 @@ void AP_OSD::init()
         break;
     }
 #endif
+    case OSD_MSP: {
+        backend = AP_OSD_MSP::probe(*this);
+        if (backend == nullptr) {
+            break;
+        }
+        hal.console->printf("Started MSP OSD\n");
+        break;
     }
-    if (backend != nullptr) {
-        // create thread as higher priority than IO
+    }
+    if (backend != nullptr && (enum osd_types)osd_type.get() != OSD_MSP) {
+        // create thread as higher priority than IO for all backends but MSP which has its own
         hal.scheduler->thread_create(FUNCTOR_BIND_MEMBER(&AP_OSD::osd_thread, void), "OSD", 1024, AP_HAL::Scheduler::PRIORITY_IO, 1);
     }
 }
@@ -226,11 +247,20 @@ void AP_OSD::osd_thread()
 void AP_OSD::update_osd()
 {
     backend->clear();
-    stats();
-    update_current_screen();
 
-    screen[current_screen].set_backend(backend);
-    screen[current_screen].draw();
+    if (!_disable) {
+        stats();
+        update_current_screen();
+
+        screen[current_screen].set_backend(backend);
+
+        // skip the drawing if we are not using a font based backend. This saves a lot of flash space when
+        // using the MSP OSD system on boards that don't have a MAX7456
+#if defined(WITH_SITL_OSD) || defined(HAL_WITH_SPI_OSD)
+        screen[current_screen].draw();
+#endif
+
+    }
 
     backend->flush();
 }
@@ -386,3 +416,9 @@ void AP_OSD::set_nav_info(NavInfo &navinfo)
     // do this without a lock for now
     nav_info = navinfo;
 }
+
+AP_OSD *AP::osd() {
+    return AP_OSD::get_singleton();
+}
+
+#endif // OSD_ENABLED
